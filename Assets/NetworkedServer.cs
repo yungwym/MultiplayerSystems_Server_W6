@@ -16,6 +16,10 @@ public class NetworkedServer : MonoBehaviour
 
     LinkedList<PlayerAccount> playerAccounts;
 
+    const int playerAccountNameAndPassword = 1;
+
+    string playerAccountDataPath;
+
     // Start is called before the first frame update
     void Start()
     { 
@@ -26,7 +30,23 @@ public class NetworkedServer : MonoBehaviour
         HostTopology topology = new HostTopology(config, maxConnections);
         hostID = NetworkTransport.AddHost(topology, socketPort, null);
 
+        playerAccountDataPath = Application.dataPath + Path.DirectorySeparatorChar + "PlayerAccounts.txt";
+
         playerAccounts = new LinkedList<PlayerAccount>();
+
+        LoadPlayerAccount();
+
+
+        //Test for loading players
+        /*
+        foreach (PlayerAccount pa in playerAccounts)
+        {
+            Debug.Log(pa.name + "," + pa.password);
+        }
+        */
+        {
+
+        }
     }
 
     // Update is called once per frame
@@ -109,11 +129,88 @@ public class NetworkedServer : MonoBehaviour
         {
             Debug.Log("Login to Account");
 
+            string n = csv[1];
+            string p = csv[2];
+
+            bool hasNameBeenFound = false;
+            bool hasMsgBeenSentToClient = false;
+
+            foreach (PlayerAccount pa in playerAccounts)
+            {
+                if (pa.name == n)
+                {
+                    hasNameBeenFound = true;
+
+                    if (pa.password == p)
+                    {
+                        SendMessageToClient(ServerToClientSignifiers.LoginComplete + "", id);
+                        hasMsgBeenSentToClient = true;
+                    }
+                    else
+                    {
+                        SendMessageToClient(ServerToClientSignifiers.LoginFailed + "", id);
+                        hasMsgBeenSentToClient = true;
+                    }
+                }
+                else
+                {
+                    //?
+                }
+            }
+
+            if (!hasNameBeenFound)
+            {
+                if (!hasMsgBeenSentToClient)
+                {
+                    SendMessageToClient(ServerToClientSignifiers.LoginFailed + "", id);
+                }
+            }
+
             //Check if player account already exists
             //Send client success/failure
 
         }
     }
+
+    private void SavePlayerAccount()
+    {
+        StreamWriter sw = new StreamWriter(Application.dataPath + Path.DirectorySeparatorChar + "PlayerAccounts.txt");
+
+        foreach (PlayerAccount pa in playerAccounts)
+        {
+            sw.WriteLine(playerAccountNameAndPassword + "," pa.name + "," + pa.password);
+        }
+
+        sw.Close();
+    }
+
+    private void LoadPlayerAccount()
+    {
+
+        if (File.Exists(playerAccountDataPath))
+        {
+            StreamReader sr = new StreamReader(playerAccountDataPath);
+
+            string line;
+
+            while ((line = sr.ReadLine()) != null)
+            {
+                string[] csv = line.Split(',');
+
+                int signifier = int.Parse(csv[0]);
+
+                if (signifier == playerAccountNameAndPassword)
+                {
+                    PlayerAccount pa = new PlayerAccount(csv[1], csv[2]);
+                    playerAccounts.AddLast(pa);
+                }
+            }
+
+            sr.Close();
+        }
+    }
+
+
 
   
 }
@@ -131,6 +228,13 @@ public class PlayerAccount
         name = Name;
         password = Password;
     }
+}
+
+
+public class GameRoom
+{
+    public PlayerAccount player1;
+    public PlayerAccount player2;
 }
 
 
