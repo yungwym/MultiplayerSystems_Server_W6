@@ -20,6 +20,10 @@ public class NetworkedServer : MonoBehaviour
 
     string playerAccountDataPath;
 
+    int playerWaitingForMatchWithID = -1;
+
+    LinkedList<GameRoom> gameRooms;
+
     // Start is called before the first frame update
     void Start()
     { 
@@ -35,6 +39,8 @@ public class NetworkedServer : MonoBehaviour
         playerAccounts = new LinkedList<PlayerAccount>();
 
         LoadPlayerAccount();
+
+        gameRooms = new LinkedList<GameRoom>();
 
 
         //Test for loading players
@@ -120,6 +126,8 @@ public class NetworkedServer : MonoBehaviour
                 PlayerAccount newPlayerAccount = new PlayerAccount(n, p);
                 playerAccounts.AddLast(newPlayerAccount);
                 SendMessageToClient(ServerToClientSignifiers.AccountCreationComplete + "", id);
+
+                SavePlayerAccount();
             }
 
             //If not, create new account, add to list and save to list
@@ -170,6 +178,40 @@ public class NetworkedServer : MonoBehaviour
             //Send client success/failure
 
         }
+        else if (signifier == ClientToServerSignifiers.JoinQueueForGameRoom)
+        {
+            if (playerWaitingForMatchWithID == -1)
+            {
+                playerWaitingForMatchWithID = id;
+            }
+            else
+            {
+                GameRoom gr = new GameRoom(playerWaitingForMatchWithID, id);
+
+                gameRooms.AddLast(gr);
+
+                SendMessageToClient(ServerToClientSignifiers.GameStart + "", gr.playerID1);
+                SendMessageToClient(ServerToClientSignifiers.GameStart + "", gr.playerID2);
+
+                playerWaitingForMatchWithID = -1;
+            }
+        }
+        else if (signifier == ClientToServerSignifiers.PlayGame)
+        {
+            GameRoom gr = GetGameRoomWithClientID(id);
+
+            if (gr != null)
+            {
+                if (gr.playerID1 == id)
+                {
+                    SendMessageToClient(ServerToClientSignifiers.OpponentPlayed + "", gr.playerID2);
+                }
+                else
+                {
+                    SendMessageToClient(ServerToClientSignifiers.OpponentPlayed + "", gr.playerID1);
+                }
+            }
+        }
     }
 
     private void SavePlayerAccount()
@@ -178,7 +220,7 @@ public class NetworkedServer : MonoBehaviour
 
         foreach (PlayerAccount pa in playerAccounts)
         {
-            sw.WriteLine(playerAccountNameAndPassword + "," pa.name + "," + pa.password);
+            sw.WriteLine(playerAccountNameAndPassword + "," + pa.name + "," + pa.password);
         }
 
         sw.Close();
@@ -211,6 +253,19 @@ public class NetworkedServer : MonoBehaviour
     }
 
 
+    private GameRoom GetGameRoomWithClientID(int id)
+    {
+        foreach(GameRoom gr in gameRooms)
+        {
+            if (gr.playerID1 == id || gr.playerID2 == id)
+            {
+                return gr;
+            }
+            return null;
+        }
+    }
+
+
 
   
 }
@@ -233,8 +288,14 @@ public class PlayerAccount
 
 public class GameRoom
 {
-    public PlayerAccount player1;
-    public PlayerAccount player2;
+    public int playerID1;
+    public int playerID2;
+
+    public GameRoom(int PlayerID1, int PlayerID2)
+    {
+        playerID1 = PlayerID1;
+        playerID2 = PlayerID2;
+    }
 }
 
 
@@ -243,6 +304,10 @@ public static class ClientToServerSignifiers
     public const int CreateAccount = 1;
 
     public const int Login = 2;
+
+    public const int JoinQueueForGameRoom = 3;
+
+    public const int PlayGame = 4;
 }
 
 public static class ServerToClientSignifiers
@@ -254,5 +319,9 @@ public static class ServerToClientSignifiers
     public const int AccountCreationComplete = 3;
 
     public const int AccountCreationFailed = 4;
+
+    public const int OpponentPlayed = 5;
+
+    public const int GameStart = 6;
 }
 
