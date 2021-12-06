@@ -261,8 +261,8 @@ public class NetworkedServer : MonoBehaviour
             {
                 return gr;
             }
-            return null;
         }
+        return null;
     }
 
 
