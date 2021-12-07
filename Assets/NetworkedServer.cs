@@ -22,7 +22,12 @@ public class NetworkedServer : MonoBehaviour
 
     int playerWaitingForMatchWithID = -1;
 
+    int playerJoiningAsObserverID = -1;
+    int observerReferenceID = -1;
+
+
     LinkedList<GameRoom> gameRooms;
+    Queue<PlayerMove> playersMoves;
 
     // Start is called before the first frame update
     void Start()
@@ -41,18 +46,8 @@ public class NetworkedServer : MonoBehaviour
         LoadPlayerAccount();
 
         gameRooms = new LinkedList<GameRoom>();
+        playersMoves = new Queue<PlayerMove>();
 
-
-        //Test for loading players
-        /*
-        foreach (PlayerAccount pa in playerAccounts)
-        {
-            Debug.Log(pa.name + "," + pa.password);
-        }
-        */
-        {
-
-        }
     }
 
     // Update is called once per frame
@@ -192,6 +187,20 @@ public class NetworkedServer : MonoBehaviour
         //
         else if (signifier == ClientToServerSignifiers.JoinQueueForGameRoom)
         {
+
+            //Observer Check
+            //GameRoom gameRoomAsObserver = null;
+
+            if (playerJoiningAsObserverID == 0)
+            {
+                Debug.Log("Observer");
+                GameRoom gr = GetGameRoomWithClientID(observerReferenceID);
+
+                gr.AddObserver(id);
+
+                SendMessageToClient(ServerToClientSignifiers.JoinAsObserver + "", id);
+            }
+
             if (playerWaitingForMatchWithID == -1)
             {
                 playerWaitingForMatchWithID = id;
@@ -204,6 +213,9 @@ public class NetworkedServer : MonoBehaviour
 
                 SendMessageToClient(ServerToClientSignifiers.GameStart + "", gr.playerID1);
                 SendMessageToClient(ServerToClientSignifiers.GameStart + "", gr.playerID2);
+
+                playerJoiningAsObserverID = 0;
+                observerReferenceID = id;
 
                 playerWaitingForMatchWithID = -1;
             }
@@ -229,7 +241,7 @@ public class NetworkedServer : MonoBehaviour
         {
             string nodeMark = csv[1];
             string nodeID = csv[2];
-            
+
             GameRoom gr = GetGameRoomWithClientID(id);
 
             if (gr != null)
@@ -246,6 +258,11 @@ public class NetworkedServer : MonoBehaviour
                 SendMessageToClient(ServerToClientSignifiers.UpdateGameboard + "," + nodeMark + "," + nodeID, gr.playerID1);
                 SendMessageToClient(ServerToClientSignifiers.UpdateGameboard + "," + nodeMark + "," + nodeID, gr.playerID2);
                 SendMessageToClient(ServerToClientSignifiers.UpdateGameboard + "," + nodeMark + "," + nodeID, gr.observerID);
+
+
+                //Save Move to Player Move Queue for Replay System 
+                PlayerMove playerMove = new PlayerMove(id, int.Parse(nodeID));
+                playersMoves.Enqueue(playerMove);
             }
         }
 
@@ -271,7 +288,36 @@ public class NetworkedServer : MonoBehaviour
             }
         }
 
+        else if (signifier == ClientToServerSignifiers.PlayerMessage)
+        {
+            string playerMsg = csv[1];
 
+            GameRoom gr = GetGameRoomWithClientID(id);
+
+            if (gr.playerID1 == id)
+            {
+                SendMessageToClient(ServerToClientSignifiers.DisplayPlayer1Message + "," + playerMsg, gr.playerID1);
+                SendMessageToClient(ServerToClientSignifiers.DisplayPlayer1Message + "," + playerMsg, gr.observerID);
+                SendMessageToClient(ServerToClientSignifiers.DisplayPlayer2Message + "," + playerMsg, gr.playerID2);
+            }
+            else if (gr.playerID2 == id)
+            {
+                SendMessageToClient(ServerToClientSignifiers.DisplayPlayer1Message + "," + playerMsg, gr.playerID2);
+                SendMessageToClient(ServerToClientSignifiers.DisplayPlayer2Message + "," + playerMsg, gr.playerID1);
+                SendMessageToClient(ServerToClientSignifiers.DisplayPlayer2Message + "," + playerMsg, gr.observerID);
+            }
+        }
+
+        //Replay 
+        else if (signifier == ClientToServerSignifiers.RequestReplayMove)
+        {
+            Queue<PlayerMove> movesToDequeue = new Queue<PlayerMove>();
+            movesToDequeue = playersMoves;
+
+            PlayerMove moveToSend = movesToDequeue.Dequeue();
+
+            SendMessageToClient(ServerToClientSignifiers.ReplayMove + "," + moveToSend.playerID + "," + moveToSend.nodeID, id);
+        }
 
 
     }
@@ -356,6 +402,18 @@ public class PlayerAccount
     }
 }
 
+public class PlayerMove
+{
+    public int playerID;
+    public int nodeID;
+
+    public PlayerMove(int pID, int nID)
+    {
+        playerID = pID;
+        nodeID = nID;
+    }
+}
+
 
 
 //
@@ -427,7 +485,8 @@ public static class ServerToClientSignifiers
 
     public const int DisplayPlayer2Message = 11;
 
-    public const int JoinAsObserver = 13;
+    public const int JoinAsObserver = 12;
 
+    public const int ReplayMove = 13;
 }
 
